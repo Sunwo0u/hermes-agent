@@ -60,6 +60,215 @@
   color: var(--color-muted-foreground) !important;
 }
 
+/* ---- Work-list view -------------------------------------------------- */
+
+.hermes-kanban-viewtabs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.hermes-kanban-viewtab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-card) 82%, transparent);
+  color: var(--color-muted-foreground);
+  border-radius: var(--radius-sm, 0.25rem);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.hermes-kanban-viewtab:hover {
+  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--color-foreground) 6%, var(--color-card));
+}
+
+.hermes-kanban-viewtab--active {
+  color: var(--color-foreground);
+  border-color: var(--color-ring);
+  background: color-mix(in srgb, var(--color-ring) 14%, var(--color-card));
+  font-weight: 600;
+}
+
+.hermes-kanban-viewtab-count {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-foreground) 9%, transparent);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hermes-kanban-viewtabs-meta {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  padding-left: 0.35rem;
+}
+
+.hermes-kanban-worklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hermes-kanban-worklist-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.hermes-kanban-worklist-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 0.25rem);
+  padding: 0.45rem 0.6rem;
+  background: color-mix(in srgb, var(--color-card) 86%, transparent);
+}
+
+.hermes-kanban-worklist-stat-label {
+  font-size: 0.78rem;
+  color: var(--color-muted-foreground);
+}
+
+.hermes-kanban-worklist-stat-count {
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hermes-kanban-worklist-section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-card) 78%, transparent);
+}
+
+.hermes-kanban-worklist-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.hermes-kanban-worklist-section-count {
+  margin-left: auto;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.hermes-kanban-worklist-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.hermes-kanban-worklist-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  cursor: pointer;
+}
+
+.hermes-kanban-worklist-row:last-child {
+  border-bottom: 0;
+}
+
+.hermes-kanban-worklist-row:hover {
+  background: color-mix(in srgb, var(--color-foreground) 5%, transparent);
+}
+
+.hermes-kanban-worklist-row--selected {
+  background: color-mix(in srgb, var(--color-ring) 7%, transparent);
+}
+
+.hermes-kanban-worklist-row--failed {
+  box-shadow: 0 0 0 2px var(--color-destructive, #d14a4a) inset;
+}
+
+.hermes-kanban-worklist-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.hermes-kanban-worklist-title-row,
+.hermes-kanban-worklist-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.hermes-kanban-worklist-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  color: var(--color-muted-foreground);
+}
+
+.hermes-kanban-worklist-title {
+  min-width: 10rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-foreground);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.hermes-kanban-worklist-meta {
+  font-size: 0.72rem;
+  color: var(--color-muted-foreground);
+}
+
+.hermes-kanban-worklist-summary-text {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hermes-kanban-worklist-open {
+  appearance: none;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-foreground);
+  border-radius: var(--radius-sm, 0.25rem);
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.hermes-kanban-worklist-open:hover {
+  background: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+}
+
+.hermes-kanban-worklist-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--color-muted-foreground);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-sm, 0.25rem);
+}
+
 /* ---- Columns layout -------------------------------------------------- */
 
 .hermes-kanban-columns {
@@ -804,17 +1013,21 @@
 
 /* ---- Staleness tiers ------------------------------------------------ */
 
-.hermes-kanban-card--stale-amber :where(.hermes-kanban-card-content) {
+.hermes-kanban-card--stale-amber :where(.hermes-kanban-card-content),
+.hermes-kanban-worklist-row.hermes-kanban-card--stale-amber {
   box-shadow: 0 0 0 1px #d4b34888 inset;
 }
-.hermes-kanban-card--stale-amber:hover :where(.hermes-kanban-card-content) {
+.hermes-kanban-card--stale-amber:hover :where(.hermes-kanban-card-content),
+.hermes-kanban-worklist-row.hermes-kanban-card--stale-amber:hover {
   box-shadow: 0 0 0 2px #d4b348 inset;
 }
-.hermes-kanban-card--stale-red :where(.hermes-kanban-card-content) {
+.hermes-kanban-card--stale-red :where(.hermes-kanban-card-content),
+.hermes-kanban-worklist-row.hermes-kanban-card--stale-red {
   box-shadow: 0 0 0 1px var(--color-destructive, #d14a4a) inset,
               0 0 8px color-mix(in srgb, var(--color-destructive, #d14a4a) 30%, transparent);
 }
-.hermes-kanban-card--stale-red:hover :where(.hermes-kanban-card-content) {
+.hermes-kanban-card--stale-red:hover :where(.hermes-kanban-card-content),
+.hermes-kanban-worklist-row.hermes-kanban-card--stale-red:hover {
   box-shadow: 0 0 0 2px var(--color-destructive, #d14a4a) inset,
               0 0 10px color-mix(in srgb, var(--color-destructive, #d14a4a) 45%, transparent);
 }

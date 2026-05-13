@@ -165,6 +165,7 @@
   // can inspect any board without shifting the CLI's active board out
   // from under a terminal they left open.
   const LS_BOARD_KEY = "hermes.kanban.selectedBoard";
+  const LS_VIEW_KEY = "hermes.kanban.viewMode";
 
   function readSelectedBoard() {
     try {
@@ -188,6 +189,19 @@
       // design intent. Regression: #20879.
       if (slug) window.localStorage.setItem(LS_BOARD_KEY, slug);
       else window.localStorage.removeItem(LS_BOARD_KEY);
+    } catch (_e) { /* ignore quota / private mode */ }
+  }
+
+  function readSelectedView() {
+    try {
+      const v = window.localStorage.getItem(LS_VIEW_KEY);
+      return v === "worklist" ? "worklist" : "board";
+    } catch (_e) { return "board"; }
+  }
+
+  function writeSelectedView(mode) {
+    try {
+      window.localStorage.setItem(LS_VIEW_KEY, mode === "worklist" ? "worklist" : "board");
     } catch (_e) { /* ignore quota / private mode */ }
   }
 
@@ -414,6 +428,7 @@
   function KanbanPage() {
     const { t } = useI18n();
     const [board, setBoard] = useState(() => readSelectedBoard() || "default");
+    const [viewMode, setViewMode] = useState(() => readSelectedView());
     const [boardList, setBoardList] = useState([]);      // [{slug, name, counts, ...}]
     const [showNewBoard, setShowNewBoard] = useState(false);
 
@@ -444,6 +459,11 @@
     const [draggingTaskId, setDraggingTaskId] = useState(null);
     const handleDragStart = useCallback(function (taskId) { setDraggingTaskId(taskId); }, []);
     const handleDragEnd = useCallback(function () { setDraggingTaskId(null); }, []);
+    const switchViewMode = useCallback(function (mode) {
+      const next = mode === "worklist" ? "worklist" : "board";
+      setViewMode(next);
+      writeSelectedView(next);
+    }, []);
     // Per-task event counter incremented whenever the WS stream reports
     // a new event for that task id. TaskDrawer useEffect-depends on its
     // own task's counter so it reloads itself on live events instead of
@@ -892,6 +912,10 @@
     if (!filteredBoard) return null;
 
     const renderMd = !config || config.render_markdown !== false;
+    const selectedBoardMeta = boardList.find(function (b) { return b.slug === board; });
+    const selectedBoardLabel = selectedBoardMeta
+      ? (selectedBoardMeta.name || selectedBoardMeta.slug)
+      : board;
 
     return h(ErrorBoundary, null,
       h("div", { className: "hermes-kanban flex flex-col gap-4" },
@@ -901,6 +925,11 @@
           onSwitch: switchBoard,
           onNewClick: function () { setShowNewBoard(true); },
           onDeleteBoard: deleteBoard,
+        }),
+        h(KanbanViewTabs, {
+          viewMode: viewMode,
+          onChange: switchViewMode,
+          boardData: filteredBoard,
         }),
         showNewBoard ? h(NewBoardDialog, {
           onCancel: function () { setShowNewBoard(false); },
@@ -934,23 +963,32 @@
           onSelectAllVisible: selectAllVisible,
         }) : null,
         error ? h("div", { className: "text-xs text-destructive px-2" }, error) : null,
-        h(BoardColumns, {
-          board: filteredBoard,
-          laneByProfile,
-          selectedIds,
-          failedIds,
-          draggingTaskId,
-          onDragStart: handleDragStart,
-          onDragEnd: handleDragEnd,
-          toggleSelected,
-          toggleRange,
-          selectAllInColumn,
-          onMove: moveTask,
-          onMoveSelected: moveSelected,
-          onOpen: setSelectedTaskId,
-          onCreate: createTask,
-          allTasks: boardData.columns.reduce(function (acc, c) { return acc.concat(c.tasks); }, []),
-        }),
+        viewMode === "worklist"
+          ? h(WorkListDashboard, {
+              board: filteredBoard,
+              boardLabel: selectedBoardLabel,
+              selectedIds,
+              failedIds,
+              toggleSelected,
+              onOpen: setSelectedTaskId,
+            })
+          : h(BoardColumns, {
+              board: filteredBoard,
+              laneByProfile,
+              selectedIds,
+              failedIds,
+              draggingTaskId,
+              onDragStart: handleDragStart,
+              onDragEnd: handleDragEnd,
+              toggleSelected,
+              toggleRange,
+              selectAllInColumn,
+              onMove: moveTask,
+              onMoveSelected: moveSelected,
+              onOpen: setSelectedTaskId,
+              onCreate: createTask,
+              allTasks: boardData.columns.reduce(function (acc, c) { return acc.concat(c.tasks); }, []),
+            }),
         selectedTaskId ? h(TaskDrawer, {
           taskId: selectedTaskId,
           boardSlug: board,
@@ -1583,6 +1621,207 @@
           }, submitting ? tx(t, "creating", "Creating…") : tx(t, "createBoard", "Create board")),
         ),
       ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Work list view — focused localhost operations surface
+  // -------------------------------------------------------------------------
+
+  const WORKLIST_STATUS_ORDER = ["running", "blocked", "ready"];
+
+  function parseTaskTime(value) {
+    if (!value) return 0;
+    if (typeof value === "number") return value;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function collectWorkListTasks(board) {
+    if (!board || !board.columns) return [];
+    const order = {};
+    WORKLIST_STATUS_ORDER.forEach(function (status, i) { order[status] = i; });
+    const out = [];
+    for (const col of board.columns) {
+      if (WORKLIST_STATUS_ORDER.indexOf(col.name) === -1) continue;
+      for (const task of col.tasks || []) out.push(task);
+    }
+    out.sort(function (a, b) {
+      const sa = order[a.status] == null ? 99 : order[a.status];
+      const sb = order[b.status] == null ? 99 : order[b.status];
+      if (sa !== sb) return sa - sb;
+      if ((b.priority || 0) !== (a.priority || 0)) return (b.priority || 0) - (a.priority || 0);
+      const aStart = parseTaskTime(a.started_at || a.created_at);
+      const bStart = parseTaskTime(b.started_at || b.created_at);
+      return bStart - aStart;
+    });
+    return out;
+  }
+
+  function KanbanViewTabs(props) {
+    const { t } = useI18n();
+    const tasks = collectWorkListTasks(props.boardData);
+    const running = tasks.filter(function (task) { return task.status === "running"; }).length;
+    const blocked = tasks.filter(function (task) { return task.status === "blocked"; }).length;
+    const ready = tasks.filter(function (task) { return task.status === "ready"; }).length;
+    return h("div", { className: "hermes-kanban-viewtabs", role: "tablist", "aria-label": "Kanban views" },
+      h("button", {
+        className: cn("hermes-kanban-viewtab", props.viewMode === "board" ? "hermes-kanban-viewtab--active" : ""),
+        onClick: function () { props.onChange("board"); },
+        role: "tab",
+        "aria-selected": props.viewMode === "board",
+        type: "button",
+      }, tx(t, "boardView", "Board")),
+      h("button", {
+        className: cn("hermes-kanban-viewtab", props.viewMode === "worklist" ? "hermes-kanban-viewtab--active" : ""),
+        onClick: function () { props.onChange("worklist"); },
+        role: "tab",
+        "aria-selected": props.viewMode === "worklist",
+        type: "button",
+        title: tx(t, "workListHint", "Focused active work list: running, blocked, and ready tasks"),
+      },
+        tx(t, "workListView", "Work list"),
+        h("span", { className: "hermes-kanban-viewtab-count" }, tasks.length),
+      ),
+      props.viewMode === "worklist"
+        ? h("span", { className: "hermes-kanban-viewtabs-meta" },
+            tx(t, "workListCounts", "{running} running · {blocked} blocked · {ready} ready", {
+              running: running,
+              blocked: blocked,
+              ready: ready,
+            }))
+        : null,
+    );
+  }
+
+  function WorkListDashboard(props) {
+    const { t } = useI18n();
+    const tasks = useMemo(function () { return collectWorkListTasks(props.board); }, [props.board]);
+    const byStatus = useMemo(function () {
+      const grouped = {};
+      WORKLIST_STATUS_ORDER.forEach(function (status) { grouped[status] = []; });
+      tasks.forEach(function (task) {
+        if (!grouped[task.status]) grouped[task.status] = [];
+        grouped[task.status].push(task);
+      });
+      return grouped;
+    }, [tasks]);
+
+    return h("div", { className: "hermes-kanban-worklist" },
+      h("div", { className: "hermes-kanban-worklist-summary" },
+        WORKLIST_STATUS_ORDER.map(function (status) {
+          const count = (byStatus[status] || []).length;
+          return h("div", { key: status, className: "hermes-kanban-worklist-stat" },
+            h("span", { className: cn("hermes-kanban-dot", COLUMN_DOT[status]) }),
+            h("span", { className: "hermes-kanban-worklist-stat-label" }, getColumnLabel(t, status)),
+            h("span", { className: "hermes-kanban-worklist-stat-count" }, count),
+          );
+        }),
+      ),
+      tasks.length === 0
+        ? h("div", { className: "hermes-kanban-worklist-empty" },
+            tx(t, "noActiveWork", "No running, blocked, or ready work matches the current filters."))
+        : WORKLIST_STATUS_ORDER.map(function (status) {
+            const rows = byStatus[status] || [];
+            if (rows.length === 0) return null;
+            return h("section", { key: status, className: "hermes-kanban-worklist-section" },
+              h("div", { className: "hermes-kanban-worklist-section-head" },
+                h("span", { className: cn("hermes-kanban-dot", COLUMN_DOT[status]) }),
+                h("span", null, getColumnLabel(t, status)),
+                h("span", { className: "hermes-kanban-worklist-section-count" }, rows.length),
+              ),
+              h("div", { className: "hermes-kanban-worklist-rows" },
+                rows.map(function (task) {
+                  return h(WorkListRow, {
+                    key: task.id,
+                    task: task,
+                    boardLabel: props.boardLabel,
+                    selected: props.selectedIds.has(task.id),
+                    failed: props.failedIds && props.failedIds.has(task.id),
+                    toggleSelected: props.toggleSelected,
+                    onOpen: props.onOpen,
+                  });
+                }),
+              ),
+            );
+          }),
+    );
+  }
+
+  function WorkListRow(props) {
+    const { t } = useI18n();
+    const task = props.task;
+    const statusLabel = getColumnLabel(t, task.status);
+    const heartbeat = task.last_heartbeat_at ? (timeAgo ? timeAgo(task.last_heartbeat_at) : String(task.last_heartbeat_at)) : null;
+    const started = task.started_at ? (timeAgo ? timeAgo(task.started_at) : String(task.started_at)) : null;
+    const created = task.created_at ? (timeAgo ? timeAgo(task.created_at) : String(task.created_at)) : null;
+    return h("div", {
+      className: cn(
+        "hermes-kanban-worklist-row",
+        props.selected ? "hermes-kanban-worklist-row--selected" : "",
+        props.failed ? "hermes-kanban-worklist-row--failed" : "",
+        stalenessClass(task),
+      ),
+      role: "button",
+      tabIndex: 0,
+      onClick: function () { props.onOpen(task.id); },
+      onKeyDown: function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          props.onOpen(task.id);
+        }
+      },
+      "aria-label": `${task.title || "untitled"} — ${task.id} — ${statusLabel}`,
+    },
+      h("label", {
+        className: "hermes-kanban-card-check-wrap",
+        onClick: function (e) { e.stopPropagation(); },
+        title: tx(t, "selectForBulk", "Select for bulk actions"),
+      },
+        h("input", {
+          type: "checkbox",
+          className: "hermes-kanban-card-check",
+          checked: props.selected,
+          onChange: function (e) { e.stopPropagation(); props.toggleSelected(task.id, true); },
+          onClick: function (e) { e.stopPropagation(); },
+          onKeyDown: function (e) { e.stopPropagation(); },
+          "aria-label": `Select task ${task.id}`,
+        }),
+      ),
+      h("div", { className: "hermes-kanban-worklist-main" },
+        h("div", { className: "hermes-kanban-worklist-title-row" },
+          h("span", { className: cn("hermes-kanban-dot", COLUMN_DOT[task.status]) }),
+          h("code", { className: "hermes-kanban-worklist-id" }, task.id),
+          h("span", { className: "hermes-kanban-worklist-title" }, task.title || tx(t, "untitled", "(untitled)")),
+          task.priority > 0
+            ? h(Badge, { className: "hermes-kanban-priority" }, `P${task.priority}`)
+            : null,
+          task.tenant
+            ? h(Badge, { variant: "outline", className: "hermes-kanban-tag" }, task.tenant)
+            : null,
+        ),
+        h("div", { className: "hermes-kanban-worklist-meta" },
+          h("span", null, props.boardLabel
+            ? tx(t, "boardLabel", "board {board}", { board: props.boardLabel })
+            : tx(t, "board", "board")),
+          h("span", null, task.assignee ? "@" + task.assignee : tx(t, "unassigned", "unassigned")),
+          h("span", null, statusLabel),
+          task.current_run_id ? h("span", null, "run #" + task.current_run_id) : null,
+          task.worker_pid ? h("span", null, "pid " + task.worker_pid) : null,
+          started ? h("span", null, tx(t, "startedAgo", "started {ago}", { ago: started })) : h("span", null, tx(t, "createdAgo", "created {ago}", { ago: created || "" })),
+          heartbeat ? h("span", null, tx(t, "heartbeatAgo", "heartbeat {ago}", { ago: heartbeat })) : null,
+          task.max_runtime_seconds ? h("span", null, "cap " + Math.round(task.max_runtime_seconds / 60) + "m") : null,
+          task.comment_count > 0 ? h("span", null, "💬 " + task.comment_count) : null,
+        ),
+        task.latest_summary
+          ? h("div", { className: "hermes-kanban-worklist-summary-text" }, task.latest_summary)
+          : null,
+      ),
+      h("button", {
+        className: "hermes-kanban-worklist-open",
+        onClick: function (e) { e.stopPropagation(); props.onOpen(task.id); },
+        type: "button",
+      }, tx(t, "open", "Open")),
     );
   }
 

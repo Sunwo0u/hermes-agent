@@ -164,6 +164,34 @@ def test_dashboard_client_side_filtering_includes_tenant_filter():
     assert "[boardData, tenantFilter, assigneeFilter, search]" in js
 
 
+def test_dashboard_has_worklist_view_tab():
+    """Kanban dashboard exposes a focused active-work list beside the board.
+
+    The work-list view intentionally reuses the authenticated Kanban plugin and
+    the existing /board payload rather than adding a second, unauthenticated
+    localhost surface.
+    """
+
+    repo_root = Path(__file__).resolve().parents[2]
+    bundle = repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
+    css = repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "style.css"
+    js = bundle.read_text()
+    style = css.read_text()
+
+    assert "const LS_VIEW_KEY = \"hermes.kanban.viewMode\";" in js
+    assert "function KanbanViewTabs(props)" in js
+    assert "function WorkListDashboard(props)" in js
+    assert "function parseTaskTime(value)" in js
+    assert "const WORKLIST_STATUS_ORDER = [\"running\", \"blocked\", \"ready\"];" in js
+    assert "viewMode === \"worklist\"" in js
+    assert "boardLabel: selectedBoardLabel" in js
+    assert "onKeyDown: function (e) { e.stopPropagation(); }" in js
+    assert "tx(t, \"boardLabel\", \"board {board}\"" in js
+    assert "No running, blocked, or ready work matches the current filters." in js
+    assert ".hermes-kanban-viewtabs" in style
+    assert ".hermes-kanban-worklist-row" in style
+    assert ".hermes-kanban-worklist-row.hermes-kanban-card--stale-amber" in style
+
 # ---------------------------------------------------------------------------
 # GET /tasks/:id returns body + comments + events + links
 # ---------------------------------------------------------------------------
